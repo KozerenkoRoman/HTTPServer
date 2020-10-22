@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html ng-app="remoteApp">
+<head content="uk">
+    <title data-id_phrase="remotecontrol">Remote control</title>
+    <meta charset="windows-1251"/>
+    <meta name="keywords" content=""/>
+    <meta name="description" content=""/>
+    <link rel="stylesheet" href="/css/jquery-ui.min.css" type="text/css">
+    <link rel="stylesheet" href="/css/style.css" type="text/css"/>
+    <script src="/scripts/angular.js"></script>
+    <script src="/scripts/jquery.min.js"></script>
+    <script src="/scripts/resources.js"></script>
+    <script src="/scripts/ngApp.js"></script>
+    <script src="/scripts/jquery-ui.min.js"></script>
+
+</head>
+<body ng-controller="remoteController" ng-init="initialize('{%marketPlace%}', {%timeOut%}, {%refreshPeriod%})">
+<div id="container" class="flex-container">
+    <div id="header" class="header">
+        <img class="left" src="/images/logo.png" alt="VIMAS Technologies"/>
+    </div>
+
+    <div id="menu" class="menu">
+        <ul id="mainmenu" class="menu-ul">
+            <li><a href="/?command=logout" data-id_phrase="logout">Logout</a></li>
+            <li><a href="/" ng-click="vmListClear()" data-id_phrase="clear">Clear</a></li>
+            <div id="langopt">
+                <select id="langlist" onchange="jQuery.fn.vmChangeLang()">
+                    <option selected value="uk">uk</option>
+                    <option value="en">en</option>
+                    <option value="ru">ru</option>
+                </select>
+            </div>
+
+
+            <label class="label"><b>{%domain%}</b></label>
+        </ul>
+    </div>
+
+    <div id="middle" class="rowParent">
+        <div id="left-sidebar" class="flexChild columnParent">
+            <div id="command-list" class="flexChild">
+                <select id="list" size="20" ng-click="vmListChange()">
+                    <option ng-repeat="item in commandTabs" data-id_phrase="{{item.idPhrase}}" value="{{item.command}}"
+                            ng-disabled="item.command == ''">{{item.text}}
+                    </option>
+                </select>
+            </div>
+
+            <div id="command-btn" class="flexChild">
+                <button id="exec" class="btn" ng-click="vmExecute()" data-id_phrase="execute">Виконати команду</button>
+            </div>
+        </div>
+
+        <div id="host-sidebar" class="flexChild columnParent" ng-show="marketPlace == 'mpStp'">
+            <div id="host-list" class="flexChild">
+                <span class="host-item" ng-repeat="item in hostList" ng-class="{hostFocused: vmIsHostSelected($index), hoshIsSTP: vmIsHostSTP($index)}" ng-click="vmHostClick($index)">
+                    <input type="checkbox" value="{{item.ip_address}}" ng-model="item.checked">{{item.ip_address}}<br>
+                </span>
+            </div>
+
+            <div id="host-btn" class="flexChild">
+                <button id="edtHost" class="btn" ng-click="vmEdtHost()" data-id_phrase="edit">Редагувати</button>
+            </div>
+        </div>
+
+        <div id="content" class="flexChild">
+
+            <ul id="ul-command" class="menu-ul tab">
+                <!--<li>-->
+                <!--<a href="#" class="tab-links" onclick="jQuery.fn.openTab(event, 'London')">London</a>-->
+                <!--</li>-->
+            </ul>
+            <!--<div id="command" class="tab-content">-->
+        </div>
+    </div>
+
+    <div id="log-content">
+        <div id="log-table" class="flexChild">
+            <table id="logtable" class="tg" make-sortable>
+                <thead>
+                <tr>
+                    <th width=12% data-id_phrase="time">Time</th>
+                    <th width=12% data-id_phrase="host">Host</th>
+                    <th width=8% data-id_phrase="command">Command</th>
+                    <th width=5% data-id_phrase="status">Status</th>
+                    <th data-id_phrase="sendinfo">Send info</th>
+                    <th data-id_phrase="receiveinfo">Receive info</th>
+                </tr>
+                <tr>
+                    <td width=12%></td>
+                    <td width=12%>
+                        <select id="hostFilter" ng-model="f.host">
+                            <option selected value=""></option>
+                            <option ng-repeat="item in hostList" value="{{item.ip_address}}">
+                                {{item.ip_address}}
+                            </option>
+                        </select>
+                    </td>
+                    <td width=8%>
+                        <select id="commandsFilter" ng-model="f.command">
+                            <option selected value=""></option>
+                            <option ng-repeat="item in arrCommands" value="{{item[0]}}">
+                                {{item[0]}}
+                            </option>
+                        </select>
+                    </td>
+                    <td width=5%>
+                        <select id="statusFilter" ng-model="f.status">
+                            <option selected value=""></option>
+                            <option value="error">error</option>
+                            <option value="ok">ok</option>
+                        </select>
+                    </td>
+                    <td></td>
+                    <td></td>
+                </tr>
+                </thead>
+                <tbody>
+                <tr ng-class="{'error-item': item.status == 'error'}" ng-repeat="item in logList | filter:f | orderBy:'-time'">
+                    <td width=12%>{{item.time}}</td>
+                    <td width=12%>{{item.host}}</td>
+                    <td width=8%>{{item.command}}</td>
+                    <td width=5%>{{item.status}}</td>
+                    <td>{{item.sendinfo}}</td>
+                    <td>{{item.receiveinfo}}</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="copyright-content" class="flexChild">
+        <label class="inline">Copyright &copy; 2016 <a href="http://www.vimas.com/sprut/">VIMAS Technologies</a> - All
+            Rights Reserved</label>
+    </div>
+
+    <ng-include src="'EditHostName.html'" id="editHostName" ng-hide="true"></ng-include>
+
+</div>
+
+
+</body>
+</html>
