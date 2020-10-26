@@ -137,7 +137,7 @@ begin
       begin
         arr := aText.Split(['=']);
         if (Length(arr) > 1) then
-          Result := THTTPDatabase.CheckPassword(arr[0], arr[1], aExitParam);
+          Result := TFireDAC.CheckPassword(arr[0], arr[1], aExitParam);
       end;
   end;
 end;

@@ -3,10 +3,31 @@ unit HTTPServer.DB;
 interface
 
 uses
-  Winapi.Windows, System.Classes, Data.DB, Vcl.Controls, System.SysUtils, System.IOUtils, Vcl.Forms,
-  IBX.IBDatabase, IBX.IBScript, IBX.IBQuery, IBX.IBCustomDataSet, IBX.IBStoredProc, vmsDebugWriter;
+  Winapi.Windows, System.Classes, Data.DB, Vcl.Controls, System.SysUtils, System.IOUtils, Vcl.Forms, System.Variants,
+  System.Generics.Collections,
+  IBX.IBDatabase, IBX.IBScript, IBX.IBQuery, IBX.IBCustomDataSet, IBX.IBStoredProc, vmsDebugWriter,
+
+  FireDAC.Stan.Intf, FireDAC.Stan.Option, FireDAC.Stan.Error, FireDAC.UI.Intf, FireDAC.Phys.Intf, FireDAC.Stan.Def,
+  FireDAC.Stan.Pool, FireDAC.Stan.Async, FireDAC.Phys, FireDAC.VCLUI.Wait, FireDAC.Stan.Param, FireDAC.DatS,
+  FireDAC.DApt.Intf, FireDAC.DApt, FireDAC.Comp.Client, FireDAC.Comp.DataSet, FireDAC.Stan.ExprFuncs, FireDAC.Phys.SQLiteDef,
+  FireDAC.Comp.UI, FireDAC.Phys.SQLite, FireDAC.Moni.Base, FireDAC.Moni.Custom, FireDAC.Moni.RemoteClient,
+  FireDAC.Comp.ScriptCommands, FireDAC.Stan.Util, FireDAC.Comp.Script;
 
 type
+  TDataRecord = TDictionary<string, Variant>;
+  TDataRecordHelper = class helper for TDataRecord
+  public
+    class function FromDataSet(ADataSet: TDataSet): TDataRecord; static;
+  end;
+
+  TWhereOperand = (woEquals, woMore, woMoreEquals, woLess, woLessEquals, woNotEquals, woIn);
+  TWhereAtom = record
+    FieldName: String;
+    Operand: TWhereOperand;
+    Value: Variant;
+    constructor Create(const AFieldName: string; const AOperand: TWhereOperand; const AValue: Variant);
+  end;
+
   THTTPDatabase = class
   public
     class function GetDBName: string;
@@ -15,6 +36,18 @@ type
     class function GetValueFromSQL(aSQLText: string; out aOutText: string): Boolean;
     class function RunScriptFromFile(aFileName: string; out aOutText: string): Boolean;
     class function RunScriptFromText(aSQLText: string; out aOutText: string): Boolean;
+  end;
+
+  TFireDAC = class
+  private const
+    DriverName = 'SQLite';
+  public
+    class function GetDBName: string;
+    class function CheckPassword(aUser, aPassword: string; out aOutText: string): Boolean;
+    class function GetJSONFromSQL(aSQLText: string; out aOutText: string): Boolean;
+    class function GetValueFromSQL(aSQLText: string; out aOutText: string): Boolean;
+    class function RunScriptFromText(aSQLText: string; out aOutText: string): Boolean;
+    class function QGet(const aSQLText: string; ARow: TDataRecord; out aOutText: string): Boolean;
   end;
 
 implementation
@@ -121,7 +154,7 @@ begin
   end;
 end;
 
-//повертає дані з навами полів в JSON-форматі
+//повертає дані з назвами полів в JSON-форматі
 //{"FieldName1":"Value1","FieldName2":"Value2"},{"FieldName1":"Value3,"FieldName2":"Value4"}
 class function THTTPDatabase.GetJSONFromSQL(aSQLText: string; out aOutText: string): Boolean;
 var
@@ -306,6 +339,223 @@ resourcestring
 begin
   aOutText := '';
   Result := GetValueFromSQL(Format(rcSQL, [aUser, aPassword]), aOutText);
+end;
+
+{ TFireDAC }
+
+class function TFireDAC.GetDBName: string;
+var
+  DBName: string;
+begin
+  DBName := TPath.Combine(TPath.GetDirectoryName(Application.ExeName), 'domometer.db');
+  if TFile.Exists(DBName) then
+    Result := DBName
+  else
+    Result := '';
+end;
+
+class function TFireDAC.CheckPassword(aUser, aPassword: string; out aOutText: string): Boolean;
+resourcestring
+  rcSQL = 'select 1 from users where name=''%s'' and pwd=''%s''';
+begin
+  aOutText := '';
+  Result := GetValueFromSQL(Format(rcSQL, [aUser, aPassword]), aOutText);
+end;
+
+//повертає дані з назвами полів в JSON-форматі
+//{"FieldName1":"Value1","FieldName2":"Value2"},{"FieldName1":"Value3,"FieldName2":"Value4"}
+class function TFireDAC.GetJSONFromSQL(aSQLText: string; out aOutText: string): Boolean;
+var
+  MainConnection: TFDConnection;
+  DBName: string;
+  sRecord: string;
+  sFieldValue: string;
+begin
+  Result := False;
+  DBName := GetDBName;
+  if DBName.IsEmpty then
+  begin
+    aOutText := rcDatabaseError;
+    Exit;
+  end;
+
+  MainConnection := TFDConnection.Create(nil);
+  try
+    MainConnection.DriverName := DriverName;
+    MainConnection.ConnectionName := 'SQLITEHTTP';
+    MainConnection.LoginPrompt := False;
+    MainConnection.Params.Values['Database'] := DBName;
+    MainConnection.Connected := True;
+    MainConnection.StartTransaction;
+    try
+      with TFDQuery.Create(nil) do
+      begin
+        try
+          Connection := MainConnection;
+          SQL.Text := aSQLText;
+          Open;
+          while not Eof do
+          begin
+            sRecord := '';
+            for var i := 0 to FieldCount - 1 do
+            begin
+              sFieldValue := Fields[i].AsString
+                                      .Replace('\', '\\')
+                                      .Replace('"', '\"')
+                                      .Replace('/', '\/')
+                                      .Replace(#$8, '\b')
+                                      .Replace(#$9, '\t')
+                                      .Replace(#$c, '\f')
+                                      .Replace(#$a, '\n')
+                                      .Replace(#$d, '\r');
+
+              if sRecord.IsEmpty then
+                sRecord := '"' + Fields[i].FieldName.ToLower + '":"' + sFieldValue + '"'
+              else
+                sRecord := sRecord + ',"' + Fields[i].FieldName.ToLower + '":"' + sFieldValue + '"';
+            end;
+            sRecord := '{' + sRecord + '}';
+            if aOutText.IsEmpty then
+              aOutText := sRecord
+            else
+              aOutText := aOutText + ',' + sRecord;
+
+            Next;
+          end;
+          Result := True;
+        finally
+          Free;
+        end;
+      end;
+      MainConnection.Commit;
+    except
+      on E: Exception do
+      begin
+        MainConnection.Rollback;
+        aOutText := E.Message;
+      end;
+    end;
+  finally
+    FreeAndNil(MainConnection);
+  end;
+end;
+
+class function TFireDAC.GetValueFromSQL(aSQLText: string; out aOutText: string): Boolean;
+var
+  MainConnection: TFDConnection;
+  DBName: string;
+begin
+  Result := False;
+  DBName := GetDBName;
+  if DBName.IsEmpty then
+  begin
+    aOutText := rcDatabaseError;
+    Exit;
+  end;
+
+  MainConnection := TFDConnection.Create(nil);
+  try
+    MainConnection.DriverName := DriverName;
+    MainConnection.ConnectionName := 'SQLITEHTTP';
+    MainConnection.LoginPrompt := False;
+    MainConnection.Params.Values['Database'] := DBName;
+    MainConnection.Connected := True;
+    MainConnection.StartTransaction;
+    try
+      with TFDQuery.Create(nil) do
+      begin
+        try
+          Connection := MainConnection;
+          SQL.Text := aSQLText;
+          Open;
+          aOutText := VarToStr(Fields[0].Value);
+          Result := True;
+        finally
+          Free;
+        end;
+      end;
+      MainConnection.Commit;
+    except
+      on E: Exception do
+      begin
+        MainConnection.Rollback;
+        aOutText := E.Message;
+      end;
+    end;
+  finally
+    FreeAndNil(MainConnection);
+  end;
+end;
+
+class function TFireDAC.QGet(const aSQLText: string; ARow: TDataRecord; out aOutText: string): Boolean;
+var
+  MainConnection: TFDConnection;
+  DBName: string;
+begin
+  Result := False;
+  DBName := GetDBName;
+  if DBName.IsEmpty then
+  begin
+    aOutText := rcDatabaseError;
+    Exit;
+  end;
+
+  MainConnection := TFDConnection.Create(nil);
+  try
+    MainConnection.DriverName := DriverName;
+    MainConnection.ConnectionName := 'SQLITEHTTP';
+    MainConnection.LoginPrompt := False;
+    MainConnection.Params.Values['Database'] := DBName;
+    MainConnection.Connected := True;
+    MainConnection.StartTransaction;
+    try
+      with TFDQuery.Create(nil) do
+      begin
+        try
+          Connection := MainConnection;
+          SQL.Text := aSQLText;
+          Open;
+          Result := not IsEmpty;
+          for var i := 0 to FieldCount - 1 do
+            ARow.AddOrSetValue(Fields[i].FieldName, Fields[i].Value);
+        finally
+          Free;
+        end;
+      end;
+      MainConnection.Commit;
+    except
+      on E: Exception do
+      begin
+        MainConnection.Rollback;
+        aOutText := E.Message;
+      end;
+    end;
+  finally
+    FreeAndNil(MainConnection);
+  end;
+end;
+
+class function TFireDAC.RunScriptFromText(aSQLText: string; out aOutText: string): Boolean;
+begin
+  Result := False;
+end;
+
+{ TWhereAtom }
+
+constructor TWhereAtom.Create(const AFieldName: string; const AOperand: TWhereOperand; const AValue: Variant);
+begin
+  FieldName := AFieldName;
+  Operand := AOperand;
+  Value := AValue;
+end;
+
+{ TDataRecordHelper }
+
+class function TDataRecordHelper.FromDataSet(ADataSet: TDataSet): TDataRecord;
+begin
+  Result := TDataRecord.Create(ADataSet.FieldCount);
+  for var i := 0 to ADataSet.FieldCount - 1 do
+    Result.Add(ADataSet.Fields[i].FieldName, ADataSet.Fields[i].Value);
 end;
 
 end.
