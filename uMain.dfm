@@ -31,9 +31,9 @@ object frmMain: TfrmMain
       Caption = 'Port:'
     end
     object lblIpAddress: TLabel
-      Left = 136
+      Left = 119
       Top = 8
-      Width = 3
+      Width = 90
       Height = 13
     end
     object btnStart: TButton
@@ -41,9 +41,8 @@ object frmMain: TfrmMain
       Top = 40
       Width = 105
       Height = 25
-      Caption = 'Start / Stop'
+      Action = aStart
       TabOrder = 0
-      OnClick = btnStartClick
     end
     object edPort: TSpinEdit
       Left = 38
@@ -55,6 +54,14 @@ object frmMain: TfrmMain
       TabOrder = 1
       Value = 8080
     end
+    object btnOpenBrowser: TButton
+      Left = 240
+      Top = 3
+      Width = 81
+      Height = 25
+      Action = aOpenBrowser
+      TabOrder = 2
+    end
   end
   object lbLog: TListBox
     Left = 0
@@ -64,5 +71,19 @@ object frmMain: TfrmMain
     Align = alClient
     ItemHeight = 13
     TabOrder = 1
+  end
+  object ActionList: TActionList
+    Left = 272
+    Top = 128
+    object aStart: TAction
+      Caption = 'Start'
+      OnExecute = aStartExecute
+      OnUpdate = aStartUpdate
+    end
+    object aOpenBrowser: TAction
+      Caption = 'Open Browser'
+      OnExecute = aOpenBrowserExecute
+      OnUpdate = aOpenBrowserUpdate
+    end
   end
 end

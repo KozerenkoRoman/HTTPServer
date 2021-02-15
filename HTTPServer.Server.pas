@@ -182,7 +182,7 @@ begin
   Active         := FOptionsReader.Active;
 
   if not FOptionsReader.IPAddress.IsEmpty then
-     IPAddress := FOptionsReader.IPAddress;
+    IPAddress := FOptionsReader.IPAddress;
 
   {$IFDEF DEBUG}
   if not LogWriter.Active then
@@ -198,7 +198,7 @@ procedure THTTPServer.Deinitialize;
 begin
   Active := False;
   Application.ProcessMessages;
-  Sleep(2000);
+  Sleep(1000);
   FOptionsReader.SaveToIni;
 end;
 

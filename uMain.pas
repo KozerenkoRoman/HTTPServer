@@ -4,9 +4,9 @@ interface
 
 uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
-  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, System.IOUtils,
+  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, System.IOUtils, Winapi.ShellAPI,
   HTTPServer.Consts, HTTPServer.Server, HTTPServer.Commands, HTTPServer.DB, HTTPServer.App, vmsDebugWriter,
-  Vcl.StdCtrls, Vcl.Samples.Spin, Vcl.ExtCtrls;
+  Vcl.StdCtrls, Vcl.Samples.Spin, Vcl.ExtCtrls, System.Actions, Vcl.ActnList;
 
 type
   TfrmMain = class(TForm)
@@ -16,12 +16,19 @@ type
     lblIpAddress: TLabel;
     lbLog: TListBox;
     pnlTop: TPanel;
+    ActionList: TActionList;
+    aStart: TAction;
+    btnOpenBrowser: TButton;
+    aOpenBrowser: TAction;
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
-    procedure btnStartClick(Sender: TObject);
+    procedure aStartExecute(Sender: TObject);
+    procedure aStartUpdate(Sender: TObject);
+    procedure aOpenBrowserExecute(Sender: TObject);
+    procedure aOpenBrowserUpdate(Sender: TObject);
   private
     FHTTPServer: THTTPServer;
-    strCommandSend: string;
+    FStrCommandSend: string;
     function DoWebExecute(Sender: TObject; aCommand: THTTPCommands.TCommand; aText: string; out aExitParam: string): Boolean;
     procedure DoLog(Sender: TObject; AIpSource, AIpDestination, AUserName, ACommandParams, ACommandResults, Description: string);
     procedure ReceiveDelayRequestMessage(var aMsg: TMessage); message WM_DELAYREQUEST_MESSAGE;
@@ -55,7 +62,7 @@ begin
   inherited;
 end;
 
-procedure TfrmMain.btnStartClick(Sender: TObject);
+procedure TfrmMain.aStartExecute(Sender: TObject);
 begin
   if FHTTPServer.Active then
     FHTTPServer.Deinitialize
@@ -88,15 +95,13 @@ begin
   end;
 end;
 
-procedure TfrmMain.DoLog(Sender: TObject; AIpSource, AIpDestination, AUserName, ACommandParams, ACommandResults,
-  Description: string);
+procedure TfrmMain.DoLog(Sender: TObject; AIpSource, AIpDestination, AUserName, ACommandParams, ACommandResults, Description: string);
 begin
   lbLog.Items.Add('IpSource: ' + AIpSource + ', IpDestination: ' + AIpDestination + ', UserName: ' + AUserName);
   lbLog.Items.Add('CommandParams: ' + ACommandParams + ', CommandResults: ' + ACommandResults);
 end;
 
-function TfrmMain.DoWebExecute(Sender: TObject; aCommand: THTTPCommands.TCommand; aText: string;
-  out aExitParam: string): Boolean;
+function TfrmMain.DoWebExecute(Sender: TObject; aCommand: THTTPCommands.TCommand; aText: string; out aExitParam: string): Boolean;
 var
   arr: TArray<string>;
 begin
@@ -105,15 +110,15 @@ begin
   case aCommand of
     THTTPCommands.TCommand.ExecSQL:
       begin
-        Result := THTTPDatabase.RunScriptFromText(aText, aExitParam);
+        Result := TFireDAC.RunScriptFromText(aText, aExitParam);
       end;
     THTTPCommands.TCommand.JSONFromSQL:
       begin
-        Result := THTTPDatabase.GetJSONFromSQL(aText, aExitParam);
+        Result := TFireDAC.GetJSONFromSQL(aText, aExitParam);
       end;
     THTTPCommands.TCommand.ExecSQLFile:
       begin
-        Result := THTTPDatabase.RunScriptFromFile(aText, aExitParam);
+        Result := TFireDAC.RunScriptFromFile(aText, aExitParam);
       end;
     THTTPCommands.TCommand.CommandList:
       begin
@@ -126,7 +131,7 @@ begin
     THTTPCommands.TCommand.ShowMessage:
       begin
         Vcl.Dialogs.ShowMessage(aText);
-        aExitParam := strCommandSend;
+        aExitParam := FStrCommandSend;
         Result := True;
       end;
     THTTPCommands.TCommand.ReceiveFile:
@@ -140,6 +145,27 @@ begin
           Result := TFireDAC.CheckPassword(arr[0], arr[1], aExitParam);
       end;
   end;
+end;
+
+procedure TfrmMain.aOpenBrowserExecute(Sender: TObject);
+var
+  URL: string;
+begin
+  URL := 'http://' + FHTTPServer.IPAddress + ':' + edPort.Value.ToString;
+  ShellExecute(0, 'open', PChar(URL), nil, nil, SW_SHOWNORMAL);
+end;
+
+procedure TfrmMain.aStartUpdate(Sender: TObject);
+begin
+  if FHTTPServer.Active then
+    TAction(Sender).Caption := 'Stop'
+  else
+    TAction(Sender).Caption := 'Start';
+end;
+
+procedure TfrmMain.aOpenBrowserUpdate(Sender: TObject);
+begin
+  TAction(Sender).Enabled := FHTTPServer.Active;
 end;
 
 end.

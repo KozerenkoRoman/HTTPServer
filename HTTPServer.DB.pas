@@ -47,6 +47,7 @@ type
     class function GetJSONFromSQL(aSQLText: string; out aOutText: string): Boolean;
     class function GetValueFromSQL(aSQLText: string; out aOutText: string): Boolean;
     class function RunScriptFromText(aSQLText: string; out aOutText: string): Boolean;
+    class function RunScriptFromFile(aFileName: string; out aOutText: string): Boolean;
     class function QGet(const aSQLText: string; ARow: TDataRecord; out aOutText: string): Boolean;
   end;
 
@@ -356,10 +357,28 @@ end;
 
 class function TFireDAC.CheckPassword(aUser, aPassword: string; out aOutText: string): Boolean;
 resourcestring
-  rcSQL = 'select 1 from users where name=''%s'' and pwd=''%s''';
+  rcSQL = 'select count(*) from users where name=''%s'' and pwd=''%s''';
 begin
   aOutText := '';
-  Result := GetValueFromSQL(Format(rcSQL, [aUser, aPassword]), aOutText);
+  if aUser.IsEmpty then
+  begin
+    Result := False;
+    aOutText := 'Name required';
+  end
+  else if aPassword.IsEmpty then
+  begin
+    Result := False;
+    aOutText := 'Password required';
+  end
+  else
+  begin
+    GetValueFromSQL(Format(rcSQL, [aUser, aPassword]), aOutText);
+    Result := StrToIntDef(aOutText, 0) > 0;
+    if not Result then
+      aOutText := 'Access is denied'
+    else
+      aOutText := '';
+  end;
 end;
 
 //повертає дані з назвами полів в JSON-форматі
@@ -535,9 +554,19 @@ begin
   end;
 end;
 
+class function TFireDAC.RunScriptFromFile(aFileName: string; out aOutText: string): Boolean;
+var
+  sText: string;
+begin
+  if not TFile.Exists(aFileName) then
+    aOutText := 'File "' + aFileName + '" not found';
+  sText := TFile.ReadAllText(aFileName);
+  Result := RunScriptFromText(sText, aOutText);
+end;
+
 class function TFireDAC.RunScriptFromText(aSQLText: string; out aOutText: string): Boolean;
 begin
-  Result := False;
+  Result := TFireDAC.GetValueFromSQL(aSQLText, aOutText);
 end;
 
 { TWhereAtom }
